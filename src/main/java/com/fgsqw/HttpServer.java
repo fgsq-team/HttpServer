@@ -10,6 +10,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.URLDecoder;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -65,6 +66,7 @@ public class HttpServer {
                                 if (lineNum == 0) {
                                     String[] s = value.split(" ");
                                     String url = s[0];
+                                    url = URLDecoder.decode(url, "UTF-8");
                                     int i = url.indexOf("?");
                                     if (i > 0) {
                                         // 请求路径截取
