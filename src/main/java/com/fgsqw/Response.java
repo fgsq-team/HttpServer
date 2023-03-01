@@ -95,6 +95,11 @@ public class Response {
         writeBytes(bytes, STREAM_CONTEXT_TYPE);
     }
 
+    /**
+     * 返回字节数组
+     * @param bytes 字节数组
+     * @param contentType 响应体contentType
+     */
     public void writeBytes(byte[] bytes, String contentType) throws IOException {
         setContentLength(bytes.length);
         setContentType(contentType);
@@ -104,6 +109,10 @@ public class Response {
         out.flush();
     }
 
+    /**
+     * 返回文件，根据文件名判断响应体的contentType类型
+     * @param file 文件
+     */
     public void writeFile(File file) throws IOException {
         setContentLength(file.length());
         setContentType(STREAM_CONTEXT_TYPE);
@@ -129,6 +138,12 @@ public class Response {
         writeStream(is, STREAM_CONTEXT_TYPE, length);
     }
 
+    /**
+     * 返回数据流
+     * @param is 数据流
+     * @param contentType 响应体contentType类型
+     * @param length 返回数据长度
+     */
     public void writeStream(InputStream is, String contentType, long length) throws IOException {
         setContentLength(length);
         setContentType(contentType);
