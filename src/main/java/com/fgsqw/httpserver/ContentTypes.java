@@ -1,14 +1,17 @@
-package com.fgsqw;
+package com.fgsqw.httpserver;
 
 import java.util.HashMap;
 import java.util.Map;
 
 /**
- * 文件类型匹配
- * @Author: fgsqme
+ * 内容类型映射类
+ * 维护文件扩展名与MIME类型的映射关系
+ *
+ * @author fgsq
  */
 public class ContentTypes {
 
+    /** 内容类型映射表 */
     public static final Map<String, String> contentTypeMap = new HashMap<>();
 
     static {
@@ -698,5 +701,6 @@ public class ContentTypes {
         contentTypeMap.put("z", "application/x-compress");
         contentTypeMap.put("zabw", "application/x-abiword");
         contentTypeMap.put("zip", "application/zip");
+        contentTypeMap.put("apk", "application/vnd.android.package-archive");
     }
 }
