@@ -64,16 +64,20 @@ public class MultUploadInputStream extends InputStream {
     private boolean readFileContentType() throws IOException {
         while (true) {
             String line = HttpUtil.readHttpLine(bufferInputStream);
-            String lineUpperCase = line.toUpperCase();
             if (StringUtils.isEmpty(line)) {
                 throw new L500Exception("文件上传失败");
             }
+            String lineUpperCase = line.toUpperCase();
             if (lineUpperCase.startsWith(HttpConstant.CONTENT_DISPOSITION.toUpperCase())) {
                 try {
-                    fileName = line.substring(lineUpperCase.indexOf("filename=\"".toUpperCase()) + 10);
-                    fileName = fileName.substring(0, fileName.indexOf("\""));
+                    int filenameIndex = lineUpperCase.indexOf("FILENAME=\"");
+                    if (filenameIndex >= 0) {
+                        fileName = line.substring(filenameIndex + 10);
+                        fileName = fileName.substring(0, fileName.indexOf("\""));
+                    }
                 } catch (Exception e) {
-                    e.printStackTrace();
+                    // filename 解析失败，后续会使用 UUID 作为文件名
+                    fileName = null;
                 }
             } else if (lineUpperCase.startsWith(HttpConstant.CONTENT_TYPE.toUpperCase())) {
                 if (fileName == null) {
@@ -146,13 +150,13 @@ public class MultUploadInputStream extends InputStream {
         }
     }
 
-    /** 缓存 */
-    byte[] cache = new byte[100];
-    /** 读取计数 */
+    /** 缓存：用于 boundary 匹配失败时暂存已读字节 */
+    byte[] cache = new byte[256];
+    /** 缓存中有效字节数 */
     int readCount = 0;
-    /** 读取索引 */
+    /** 缓存读取索引 */
     int readIndex = 0;
-    /** 是否读取完成 */
+    /** 是否读取完成（已检测到 boundary） */
     boolean readCompleted = false;
 
     @Override
@@ -160,46 +164,81 @@ public class MultUploadInputStream extends InputStream {
         if (readCompleted) {
             return -1;
         }
+        // 优先从缓存读取（boundary 匹配失败后回退的数据）
         if (readCount > 0) {
             readCount--;
+            readSize++;
             fileSize++;
             return cache[readIndex++] & 0xFF;
-        } else {
-            readIndex = 0;
         }
+        readIndex = 0;
+
         int read = bufferInputStream.read();
-        if (read != -1) {
-            readSize += read;
-            if (read == '\r') {
-                int r = bufferInputStream.read();
+        if (read == -1) {
+            readCompleted = true;
+            return -1;
+        }
+        readSize++;
+
+        if (read == '\r') {
+            int r = bufferInputStream.read();
+            if (r == -1) {
+                // 流结束，返回 \r
+                readCompleted = true;
+                return '\r';
+            }
+            readSize++;
+
+            if (r != '\n') {
+                // \r 后不是 \n，\r 作为数据返回，下一个字节缓存
+                cache[0] = (byte) r;
+                readCount = 1;
+                readIndex = 0;
+                fileSize++;
+                return '\r';
+            }
+
+            // \r\n 匹配成功，尝试匹配 boundary
+            cache[0] = (byte) '\r';
+            cache[1] = (byte) '\n';
+            readCount = 2;
+
+            boolean flag = true;
+            for (byte b : boundaryByte) {
+                r = bufferInputStream.read();
+                if (r == -1) {
+                    // 流意外结束，缓存中的数据作为文件数据返回
+                    readCompleted = true;
+                    return cache[readIndex++] & 0xFF;
+                }
+                readSize++;
+                // 防止缓存溢出，动态扩容
+                if (readCount >= cache.length) {
+                    byte[] newCache = new byte[cache.length * 2];
+                    System.arraycopy(cache, 0, newCache, 0, cache.length);
+                    cache = newCache;
+                }
                 cache[readCount++] = (byte) r;
-                if (r == '\n') {
-                    // 读取数据判断是不是 boundary结束标识
-                    boolean flag = true;
-                    for (byte b : boundaryByte) {
-                        r = bufferInputStream.read();
-                        if (r == -1) {
-                            return r;
-                        }
-                        // 先缓存数据,如果不是boundary结束标识,那下次读取就可以读取缓存的数据
-                        cache[readCount++] = (byte) r;
-                        if (r != b) {
-                            flag = false;
-                            break;
-                        }
-                    }
-                    // 读取结束标识是 -- 的话就还有文件
-                    if (flag) {
-                        r = bufferInputStream.read(cache, 0, 2);
-                        if (r == 2) {
-                            hasNext = !(cache[0] == '-' && cache[1] == '-');
-                        }
-                        readCompleted = true;
-                        return -1;
-                    }
+                if (r != (b & 0xFF)) {
+                    flag = false;
+                    break;
                 }
             }
+
+            if (flag) {
+                // boundary 完全匹配，读取结束标识 --
+                int b1 = bufferInputStream.read();
+                int b2 = bufferInputStream.read();
+                if (b1 != -1 && b2 != -1) {
+                    hasNext = !(b1 == '-' && b2 == '-');
+                }
+                readCompleted = true;
+                return -1;
+            }
+            // boundary 匹配失败，cache 中的 \r\n + 已读字节作为文件数据返回
+            // 下次调用 read() 时会优先从 cache 读取
         }
+
         fileSize++;
         return read;
     }
@@ -242,7 +281,7 @@ public class MultUploadInputStream extends InputStream {
 
     @Override
     public void close() throws IOException {
-        request.getInputStream().close();
+        bufferInputStream.close();
     }
 
 }

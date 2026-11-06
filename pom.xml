@@ -6,7 +6,7 @@
 
     <groupId>com.fgsqw</groupId>
     <artifactId>HttpServer</artifactId>
-    <version>1.9.58</version>
+    <version>1.9.59</version>
 
     <properties>
         <maven.compiler.source>8</maven.compiler.source>

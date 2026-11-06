@@ -79,6 +79,25 @@ public class BufferInputStream extends InputStream {
     }
 
     @Override
+    public long skip(long n) throws IOException {
+        if (n <= 0) {
+            return 0;
+        }
+        // 优先从缓冲区跳过
+        if (total > 0) {
+            int skip = (int) Math.min(n, total);
+            index += skip;
+            total -= skip;
+            if (skip == n) {
+                return n;
+            }
+            // 缓冲区不够，继续从底层流跳过
+            return skip + is.skip(n - skip);
+        }
+        return is.skip(n);
+    }
+
+    @Override
     public void close() throws IOException {
         is.close();
     }

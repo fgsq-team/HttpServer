@@ -56,10 +56,14 @@ public class SingleUploadInputStream extends InputStream {
             String lineUpperCase = line.toUpperCase();
             if (lineUpperCase.startsWith(HttpConstant.CONTENT_DISPOSITION.toUpperCase())) {
                 try {
-                    filename = line.substring(lineUpperCase.indexOf("filename=\"".toUpperCase()) + 10);
-                    filename = filename.substring(0, filename.indexOf("\""));
+                    int filenameIndex = lineUpperCase.indexOf("FILENAME=\"");
+                    if (filenameIndex >= 0) {
+                        filename = line.substring(filenameIndex + 10);
+                        filename = filename.substring(0, filename.indexOf("\""));
+                    }
                 } catch (Exception e) {
-                    e.printStackTrace();
+                    // filename 解析失败，后续会使用 UUID 作为文件名
+                    filename = null;
                 }
             }
             if (lineUpperCase.startsWith(HttpConstant.CONTENT_TYPE.toUpperCase())) {
@@ -67,7 +71,9 @@ public class SingleUploadInputStream extends InputStream {
                     filename = StringUtils.getUUID();
                 }
                 this.fileName = filename;
-                is.skip(2); // \r\n
+                // 精确跳过 \r\n
+                is.read();
+                is.read();
                 readHeadLength += 2;
                 // 数据长度 = 总请求体长度 -  (尾部分割行长度 + 已读请求体长度)
                 fileSize = request.getContentLength() - (firstLineLength + readHeadLength);
@@ -87,7 +93,7 @@ public class SingleUploadInputStream extends InputStream {
         }
         int read = is.read();
         if (read != -1) {
-            readSize += read;
+            readSize++;
         }
         return read;
     }
